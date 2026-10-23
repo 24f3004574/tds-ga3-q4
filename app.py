@@ -1,5 +1,11 @@
 from copy import deepcopy
 
+
+import logging
+
+logger = logging.getLogger("incident_agent")
+
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -126,7 +132,37 @@ async def create_incident(body: IncidentRequest, request: Request):
         replace_state(run_id, state)
         return JSONResponse(content=state["createdResponse"])
 
-    except PlanningError:
+    # except PlanningError:
+    #     failed = {
+    #         "runId": run_id,
+    #         "status": "failed",
+    #         "diagnosis": None,
+    #         "chosenEffect": None,
+    #         "suppressed": [],
+    #         "actionLog": [],
+    #         "receiptLog": [],
+    #         "otlp": {
+    #             "resourceSpans": [{
+    #                 "scopeSpans": [{
+    #                     "spans": trace["spans"],
+    #                 }],
+    #             }],
+    #         },
+    #     }
+    #     replace_state(run_id, {
+    #         **placeholder,
+    #         "status": "failed",
+    #         "lastResponse": failed,
+    #         "createdResponse": failed,
+    #     })
+    #     return JSONResponse(status_code=422, content=failed)
+
+    # Inside create_incident(), replace the existing PlanningError handler:
+    except PlanningError as exc:
+        logger.warning(
+            "Incident planning rejected: %s",
+            str(exc),
+        )
         failed = {
             "runId": run_id,
             "status": "failed",
