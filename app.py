@@ -3,6 +3,7 @@ from copy import deepcopy
 
 import logging
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("incident_agent")
 
 
@@ -38,10 +39,14 @@ app = FastAPI(
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request, exc):
-    # Never return submitted input or sensitive values in validation errors.
+    # Never return submitted input or sensitive values: report field paths only.
+    fields = []
+    for err in exc.errors()[:10]:
+        fields.append(".".join(str(part) for part in err.get("loc", ())))
+    logger.warning("Request validation failed on: %s", fields)
     return JSONResponse(
         status_code=422,
-        content={"error": "Invalid request"},
+        content={"error": "Invalid request", "fields": fields},
     )
 
 
@@ -168,6 +173,7 @@ async def create_incident(body: IncidentRequest, request: Request):
         failed = {
             "runId": run_id,
             "status": "failed",
+            "error": "planning_failed: " + str(exc)[:200],
             "diagnosis": None,
             "chosenEffect": None,
             "suppressed": [],
