@@ -6,6 +6,8 @@ import logging
 logger = logging.getLogger("incident_agent")
 
 
+from pydantic import ValidationError
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -196,7 +198,18 @@ async def create_incident(body: IncidentRequest, request: Request):
 
 
 @app.post("/v2/incidents/{runId}/receipts")
-async def submit_receipt(runId: str, body: ReceiptRequest):
+async def submit_receipt(runId: str, request: Request):
+    # Hash the RAW body, so a change to any field (even one the schema ignores)
+    # counts as changed content and yields 409 on the same receiptId.
+    try:
+        raw = await request.json()
+        body = ReceiptRequest.model_validate(raw)
+    except (ValueError, ValidationError):
+        return JSONResponse(
+            status_code=422,
+            content={"error": "Invalid request"},
+        )
+
     current = get_run(runId)
 
     if current is None:
@@ -205,11 +218,7 @@ async def submit_receipt(runId: str, body: ReceiptRequest):
             content={"error": "Run not found"},
         )
 
-    receipt_data = body.model_dump(
-        mode="json",
-        exclude_none=True,
-    )
-    receipt_hash = fingerprint(receipt_data)
+    receipt_hash = fingerprint(raw)
     receipt_id = body.receiptId
 
     def transition(state):
